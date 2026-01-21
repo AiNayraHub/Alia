@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gamevoo - Master Admin Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: #f1f5f9; font-family: 'Inter', sans-serif; }
+        .admin-card { transition: all 0.3s ease; }
+        .admin-card:hover { transform: translateY(-5px); }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <nav class="bg-indigo-800 text-white p-5 shadow-2xl flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
+                <i class="fas fa-user-shield text-xl"></i>
+            </div>
+            <h1 class="font-black italic uppercase tracking-tighter text-2xl">Gamevoo <span class="text-indigo-300">Admin</span></h1>
+        </div>
+        <button onclick="location.reload()" class="bg-white/10 hover:bg-white/20 px-6 py-2 rounded-2xl text-xs font-black uppercase tracking-widest transition-all">
+            <i class="fas fa-sync-alt mr-2"></i> Refresh
+        </button>
+    </nav>
+
+    <div class="p-6 max-w-7xl mx-auto space-y-8">
+        
+        <div class="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 admin-card">
+            <h2 class="font-black text-slate-800 uppercase text-sm mb-6 flex items-center gap-2">
+                <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> Manage Gift Codes
+            </h2>
+            <div class="flex flex-col md:flex-row gap-4">
+                <input id="new-code" type="text" placeholder="ENTER CODE NAME" class="flex-grow p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black uppercase placeholder:font-normal">
+                <input id="new-reward" type="number" placeholder="COINS REWARD" class="w-full md:w-48 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-sm font-black placeholder:font-normal">
+                <button onclick="createGiftCode()" class="bg-indigo-600 text-white font-black px-10 py-4 rounded-2xl uppercase text-xs shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">
+                    Generate Code
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 admin-card">
+            <h2 class="font-black text-slate-800 uppercase text-sm mb-6 flex items-center gap-2">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full"></span> Withdrawal Requests (Pending)
+            </h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-100">
+                            <th class="p-4 uppercase font-black text-[10px] tracking-widest">User ID</th>
+                            <th class="p-4 uppercase font-black text-[10px] tracking-widest">Amount</th>
+                            <th class="p-4 uppercase font-black text-[10px] tracking-widest">UPI Details</th>
+                            <th class="p-4 uppercase font-black text-[10px] tracking-widest">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="withdraw-table" class="font-bold text-slate-700">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 admin-card">
+            <h2 class="font-black text-slate-800 uppercase text-sm mb-6 flex items-center gap-2">
+                <span class="w-2 h-2 bg-rose-500 rounded-full"></span> User Database & Control
+            </h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-100">
+                            <th class="p-4 uppercase font-black text-[10px] tracking-widest">User Email</th>
+                            <th class="p-4 uppercase font-black text-[10px] tracking-widest">Coins Management</th>
+                            <th class="p-4 uppercase font-black text-[10px] tracking-widest">Status</th>
+                            <th class="p-4 uppercase font-black text-[10px] tracking-widest">Security</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table" class="font-bold text-slate-700">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // LOAD DATA
+        async function fetchAdminDashboard() {
+            // Withdrawals Fetch
+            const { data: wData } = await supabaseClient.from('withdrawals').select('*').eq('status', 'pending');
+            const wTable = document.getElementById('withdraw-table');
+            wTable.innerHTML = wData?.map(w => `
+                <tr class="border-b border-slate-50 hover:bg-slate-50 transition-all">
+                    <td class="p-4 text-xs font-mono">${w.user_id}</td>
+                    <td class="p-4 font-black text-indigo-600 italic">🪙 ${w.amount}</td>
+                    <td class="p-4 text-slate-500">${w.upi_id}</td>
+                    <td class="p-4 flex gap-2">
+                        <button onclick="updateWithdraw('${w.id}', 'success')" class="bg-emerald-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase">Approve</button>
+                        <button onclick="updateWithdraw('${w.id}', 'rejected')" class="bg-rose-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase">Reject</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" class="p-4 text-center text-slate-400">No Pending Requests</td></tr>';
+
+            // Users Fetch
+            const { data: uData } = await supabaseClient.from('profiles').select('*');
+            const uTable = document.getElementById('user-table');
+            uTable.innerHTML = uData?.map(u => `
+                <tr class="border-b border-slate-50 hover:bg-slate-50 transition-all">
+                    <td class="p-4 text-slate-600">${u.email || 'N/A'}</td>
+                    <td class="p-4">
+                        <div class="flex items-center gap-2">
+                            <input type="number" value="${u.coins}" id="coin-${u.id}" class="w-24 p-2 bg-slate-100 border border-slate-200 rounded-xl font-black text-indigo-600">
+                            <button onclick="saveUserCoins('${u.id}')" class="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center shadow-md"><i class="fas fa-save text-[10px]"></i></button>
+                        </div>
+                    </td>
+                    <td class="p-4">
+                        <span class="px-3 py-1 rounded-full text-[9px] font-black uppercase ${u.is_blocked ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}">
+                            ${u.is_blocked ? 'Blocked' : 'Active'}
+                        </span>
+                    </td>
+                    <td class="p-4">
+                        <button onclick="toggleUserStatus('${u.id}', ${u.is_blocked})" class="text-slate-400 hover:text-rose-600 text-[10px] font-black uppercase tracking-widest border border-slate-200 px-4 py-2 rounded-xl transition-all">
+                            ${u.is_blocked ? 'Unblock User' : 'Block User'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('') || '';
+        }
+
+        async function createGiftCode() {
+            const code = document.getElementById('new-code').value.toUpperCase();
+            const reward = document.getElementById('new-reward').value;
+            if(!code || !reward) return alert("Fill all fields!");
+            const { error } = await supabaseClient.from('gift_codes').insert([{ code, reward }]);
+            if(!error) { alert("Gift Code Created Successfully!"); location.reload(); }
+        }
+
+        async function saveUserCoins(id) {
+            const newAmount = document.getElementById(`coin-${id}`).value;
+            const { error } = await supabaseClient.from('profiles').update({ coins: newAmount }).eq('id', id);
+            if(!error) alert("Coins Updated!");
+        }
+
+        async function updateWithdraw(id, status) {
+            await supabaseClient.from('withdrawals').update({ status }).eq('id', id);
+            alert("Request " + status); fetchAdminDashboard();
+        }
+
+        async function toggleUserStatus(id, currentStatus) {
+            if(confirm("Are you sure?")) {
+                await supabaseClient.from('profiles').update({ is_blocked: !currentStatus }).eq('id', id);
+                fetchAdminDashboard();
+            }
+        }
+
+        // Run On Load
+        setTimeout(fetchAdminDashboard, 1500); 
+    </script>
+</body>
+                  </html>
+  
