@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gamevoo - Master Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+    <nav class="bg-indigo-700 text-white p-4 shadow-lg flex justify-between items-center">
+        <h1 class="font-black italic uppercase tracking-tighter text-xl">Gamevoo Admin</h1>
+        <button onclick="location.reload()" class="bg-white/20 px-4 py-2 rounded-xl text-xs font-bold uppercase">Refresh</button>
+    </nav>
+
+    <div class="p-6 max-w-6xl mx-auto space-y-8">
+        
+        <div class="bg-white p-6 rounded-[30px] shadow-sm border border-slate-200">
+            <h2 class="font-black text-slate-800 uppercase text-sm mb-4"><i class="fas fa-ticket-alt mr-2 text-indigo-600"></i> Create Gift Code</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input id="new-code" type="text" placeholder="Code (e.g. MEGA500)" class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold">
+                <input id="new-reward" type="number" placeholder="Reward (Coins)" class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold">
+                <button onclick="createGiftCode()" class="bg-indigo-600 text-white font-black py-3 rounded-xl uppercase text-xs hover:bg-indigo-700">Add Code</button>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-[30px] shadow-sm border border-slate-200">
+            <h2 class="font-black text-slate-800 uppercase text-sm mb-4"><i class="fas fa-money-bill-wave mr-2 text-emerald-600"></i> Pending Withdrawals</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-100">
+                            <th class="p-4">User Email</th>
+                            <th class="p-4">Amount (Coins)</th>
+                            <th class="p-4">UPI ID</th>
+                            <th class="p-4">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="withdraw-table">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-[30px] shadow-sm border border-slate-200">
+            <h2 class="font-black text-slate-800 uppercase text-sm mb-4"><i class="fas fa-users mr-2 text-blue-600"></i> User Control</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-100">
+                            <th class="p-4">Email</th>
+                            <th class="p-4">Coins</th>
+                            <th class="p-4">Status</th>
+                            <th class="p-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // ADMIN SPECIFIC LOGIC
+        async function loadAdminData() {
+            // Fetch Pending Withdrawals
+            const { data: wData } = await supabaseClient.from('withdrawals').select('*').eq('status', 'pending');
+            const wTable = document.getElementById('withdraw-table');
+            wTable.innerHTML = wData.map(w => `
+                <tr class="border-b border-slate-50">
+                    <td class="p-4 font-bold text-slate-600">${w.user_id.substring(0,8)}...</td>
+                    <td class="p-4 font-black text-indigo-600">${w.amount}</td>
+                    <td class="p-4 text-slate-500">${w.upi_id || 'N/A'}</td>
+                    <td class="p-4 space-x-2">
+                        <button onclick="updateWithdraw('${w.id}', 'success')" class="bg-emerald-500 text-white px-3 py-1 rounded-lg text-[10px] font-bold">APPROVE</button>
+                        <button onclick="updateWithdraw('${w.id}', 'rejected')" class="bg-rose-500 text-white px-3 py-1 rounded-lg text-[10px] font-bold">REJECT</button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Fetch Users
+            const { data: uData } = await supabaseClient.from('profiles').select('*');
+            const uTable = document.getElementById('user-table');
+            uTable.innerHTML = uData.map(u => `
+                <tr class="border-b border-slate-50">
+                    <td class="p-4 text-slate-600 font-bold">${u.email || 'User'}</td>
+                    <td class="p-4">
+                        <input type="number" value="${u.coins}" id="coin-${u.id}" class="w-20 p-1 border rounded text-center font-black">
+                        <button onclick="editCoins('${u.id}')" class="text-indigo-600 ml-2"><i class="fas fa-save"></i></button>
+                    </td>
+                    <td class="p-4">
+                        <span class="px-2 py-1 rounded-full text-[10px] font-black uppercase ${u.is_blocked ? 'bg-rose-100 text-rose-600' : 'bg-green-100 text-green-600'}">
+                            ${u.is_blocked ? 'Blocked' : 'Active'}
+                        </span>
+                    </td>
+                    <td class="p-4">
+                        <button onclick="toggleBlock('${u.id}', ${u.is_blocked})" class="text-slate-400 hover:text-rose-600 text-xs font-bold uppercase tracking-tighter">
+                            ${u.is_blocked ? 'Unblock' : 'Block User'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function createGiftCode() {
+            const code = document.getElementById('new-code').value;
+            const reward = document.getElementById('new-reward').value;
+            const { error } = await supabaseClient.from('gift_codes').insert([{ code, reward }]);
+            if(!error) { alert("Code Created!"); location.reload(); }
+        }
+
+        async function updateWithdraw(id, status) {
+            await supabaseClient.from('withdrawals').update({ status }).eq('id', id);
+            alert("Updated!"); loadAdminData();
+        }
+
+        async function editCoins(id) {
+            const amount = document.getElementById(`coin-${id}`).value;
+            await supabaseClient.from('profiles').update({ coins: amount }).eq('id', id);
+            alert("Coins Updated!");
+        }
+
+        async function toggleBlock(id, currentStatus) {
+            await supabaseClient.from('profiles').update({ is_blocked: !currentStatus }).eq('id', id);
+            loadAdminData();
+        }
+
+        window.onload = loadAdminData;
+    </script>
+</body>
+</html>
+
